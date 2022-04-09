@@ -9,3 +9,5 @@ This is the folder for training the Pytorch model. The folder does not include t
 <br /> With such a set up, the total database is 1050 photos for both subjects - tachi and tennis - while the validation set is 20% of the total database.
 #### "test.py" and "train.py" 
 These are transfer learning models from the Kaggle "Cats vs Dogs" project. A total of five epochs are run. 
+#### "model.pt" and "model_original.pt"
+These are exports of the trained model, which will be later used for iOS development. Note that the former document will be directly included in the swift project, while the latter file is not as important.

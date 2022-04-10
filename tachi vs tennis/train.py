@@ -12,25 +12,23 @@ import copy
 
 
 # Data augmentation and normalization for training
-# Just normalization for validation
 
-# See https://pytorch.org/hub/pytorch_vision_mobilenet_v2/ for necessary mobilenet preprocessing
 data_transforms = {
     'train': transforms.Compose([
-        transforms.RandomRotation(5),
-        transforms.RandomHorizontalFlip(),
+        transforms.RandomRotation(5), #random rotation, flipping, and cropping
+        transforms.RandomHorizontalFlip(), 
         transforms.RandomResizedCrop(224, scale=(0.96, 1.0), ratio=(0.95, 1.05)),
-        transforms.ToTensor(),
-        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+        transforms.ToTensor(), #convert to tensor
+        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]) #normalize to values
     ]),
-    'val': transforms.Compose([
-        transforms.Resize([224,224]),
-        transforms.ToTensor(),
+    'val': transforms.Compose([ #note that the same processing will be applied for the iOS file 
+        transforms.Resize([224,224]), 
+        transforms.ToTensor(), #convert to tensor
         transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
     ]),
 }
 
-data_dir = 'data'
+data_dir = 'data' #define location of the datasets
 image_datasets = {x: datasets.ImageFolder(os.path.join(data_dir, x),
                                           data_transforms[x])
                   for x in ['train', 'val']}
@@ -40,7 +38,7 @@ dataloaders = {x: torch.utils.data.DataLoader(image_datasets[x], batch_size=4,
 dataset_sizes = {x: len(image_datasets[x]) for x in ['train', 'val']}
 class_names = image_datasets['train'].classes
 
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu") #gpu availiable 
 
 print(class_names)
 print(f'Train image size: {dataset_sizes["train"]}')
@@ -92,13 +90,13 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=2):
 
             # Iterate over data.
             for i, (inputs, labels) in enumerate(dataloaders[phase]):
-                inputs = inputs.to(device)
+                inputs = inputs.to(device) #push canvas to device if neccesary
                 labels = labels.to(device)
 
-                # zero the parameter gradients
+                # call optimizer zero grad
                 optimizer.zero_grad()
                 
-                if i % 200 == 199:
+                if i % 200 == 199: #calculate the loss
                     print('[%d, %d] loss: %.3f' % 
                           (epoch + 1, i, running_loss / (i * inputs.size(0))))
 
@@ -127,7 +125,7 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=2):
             print('{} Loss: {:.4f} Acc: {:.4f}'.format(
                 phase, epoch_loss, epoch_acc))
 
-            # deep copy the model
+            # saving the best model
             if phase == 'val' and epoch_loss < best_loss:
                 print(f'New best model found!')
                 print(f'New record loss: {epoch_loss}, previous record loss: {best_loss}')
@@ -147,27 +145,28 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=2):
     return model, best_loss, best_acc
 
 
-#### Finetuning the convnet ####
+###Different approach for deployment in the iOS environment
 # Load a pretrained model and reset final classification fully connected layer.
 
-model_conv = models.mobilenet_v2(pretrained=True)
+model_conv = models.mobilenet_v2(pretrained=True) #typically, ResNet is used but here mobileNet is used instead for better compatatbilities
 
-for param in model_conv.parameters():
+for param in model_conv.parameters(): #Only retrain the last layer, so setting all the parameters to requires_grade=false 
     param.requires_grad = False
 
-# Parameters of newly constructed modules have requires_grad=True by default
+# Create one new linear layer to classify two classes: Taichi and Tennis
 num_ftrs = model_conv.classifier[1].in_features
 model_conv.classifier[1] = nn.Linear(num_ftrs, 2)
 model_conv = model_conv.to(device)
 
-criterion = nn.CrossEntropyLoss()
+criterion = nn.CrossEntropyLoss() #entropy loss
 
-# Observe that only parameters of classification layer are being optimized
+# optimizer 
 optimizer_conv = optim.SGD(model_conv.classifier[1].parameters(), lr=0.001, momentum=0.9)
 
-# Decay LR by a factor of 0.1 every 7 epochs
+# scheduler 
 exp_lr_scheduler = lr_scheduler.StepLR(optimizer_conv, step_size=7, gamma=0.1)
 
+#put everything into the function and TRAIN!!
 model_conv, best_val_loss, best_val_acc = train_model(model_conv,
                                                       criterion,
                                                       optimizer_conv,
@@ -190,7 +189,7 @@ model_conv = model_conv.to("cpu")
 traced_script_module = torch.jit.trace(model_conv, example)
 torchscript_model_optimized = optimize_for_mobile(traced_script_module)
 
-# save optimized model for mobile
+# saving optimized model for mobile
 PATH = 'model.pt'
 torchscript_model_optimized.save(PATH)
 

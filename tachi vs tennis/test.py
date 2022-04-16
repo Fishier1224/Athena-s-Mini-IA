@@ -14,13 +14,11 @@ model = torch.jit.load(PATH)
 
 def load_and_show(i):
     img = Image.open(f'{test_data_dir}/{test_data_files[i]}').convert("RGB")
-    # RGB is important because we don't want RGBA with 4 channels!
     plt.imshow(img)
     plt.show()
     return img
 
 
-# See https://pytorch.org/hub/pytorch_vision_mobilenet_v2/ for necessary mobilenet preprocessing
 def transform_image(pillow_img):
     img = transforms.functional.resize(pillow_img, [224, 224])
     img = transforms.functional.to_tensor(img)
